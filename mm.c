@@ -1,3 +1,11 @@
+/*
+  Filename   : mm.c
+  Author     : Jonathan Wilkins & Nick Loser
+  Course     : CSCI 380-01
+  Assignment : Assignment 8
+  Description: Implements allocation
+*/
+
 #include <assert.h>
 #include <stdio.h>
 #include <stdlib.h>
