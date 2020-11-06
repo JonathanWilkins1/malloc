@@ -116,13 +116,13 @@ header (address p)
 static inline bool
 isAllocated (address p)
 {
-  return *header (p) & 1;
+  return *(header (p)) & 1;
 } 
 
 static inline uint32_t
 sizeOf (address p)
 {
-  return (*header (p) & ~0x2) - 1;
+  return *header (p) & ~0x2;
 }
 
 static inline tag*
@@ -134,19 +134,19 @@ footer (address p)
 static inline address
 nextBlock (address p)
 {
-  return (address) (nextHeader (p) + 1);
+  return p + sizeOf (p);
 }
 
 static inline tag*
 prevFooter (address p)
 {
-  return header (p) - 1;
+  return header (p) - TAG_SIZE;
 }
 
 static inline tag*
 nextHeader (address p)
 {
-  return (tag*) (p + ((sizeOf (p) * WORD_SIZE) - TAG_SIZE));
+  return (tag*) header (p + sizeOf (p));
 }
 
 static inline address
@@ -201,9 +201,9 @@ main ()
   //makeBlock (nextBlock (g_heapBase), 2); 
   printPtrDiff ("header", header (g_heapBase), heapZero);
   printPtrDiff ("footer", footer (g_heapBase), heapZero);
-  printPtrDiff ("nextBlock", nextBlock (g_heapBase), heapZero);
-  printPtrDiff ("prevFooter", prevFooter (g_heapBase), heapZero);
-  printPtrDiff ("nextHeader", nextHeader (g_heapBase), heapZero);
+  // printPtrDiff ("nextBlock", nextBlock (g_heapBase), heapZero);
+  // printPtrDiff ("prevFooter", prevFooter (g_heapBase), heapZero);
+   printPtrDiff ("nextHeader", nextHeader (g_heapBase), heapZero);
   // address twoWordBlock = nextBlock (g_heapBase); 
   // printPtrDiff ("prevBlock", prevBlock (twoWordBlock), heapZero);
 
