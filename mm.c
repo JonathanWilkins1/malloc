@@ -116,13 +116,13 @@ header (address p)
 static inline bool
 isAllocated (address p)
 {
-  return *header (p) & 1;
+  return *header (p) & 0x1;
 } 
 
 static inline uint32_t
 sizeOf (address p)
 {
-  return (*header (p) & ~0x2) - 1;
+  return (*header (p) & ~0x1);
 }
 
 static inline tag*
@@ -152,7 +152,7 @@ nextHeader (address p)
 static inline address
 prevBlock (address p)
 {
-  return p - (*prevFooter (p) & ~0x2);
+  return p - (sizeOf((address) header (p)) * WORD_SIZE);
 }
 
 static inline void
@@ -164,7 +164,10 @@ makeBlock (address p, uint32_t t, bool b)
 static inline void
 toggleBlock (address p)
 {
-
+  tag* headerTag = header (p);
+  *headerTag = (sizeOf (p) | !isAllocated (p));
+  tag* footerTag = footer (p);
+  *footerTag = (sizeOf (p) | !isAllocated (p));
 }
 
 
@@ -189,7 +192,7 @@ main ()
   //                 ====  ===========
   tag heapZero[] = 
     { 0, 0, 1, 4 | 1, 0, 0, 0, 0, 0,  
-      0, 4 | 1, 2 | 0, 0, 0, 2 | 0, 1 }; 
+      0, 4 | 1, 2 | 0, 0, 0, 2 | 0, 1}; 
   //tag heapZero[16] = { 0 }; 
   // Point to DWORD 1 (DWORD 0 has no space before it)
   address g_heapBase = (address) heapZero + DWORD_SIZE;
@@ -204,18 +207,20 @@ main ()
   printPtrDiff ("nextBlock", nextBlock (g_heapBase), heapZero);
   printPtrDiff ("prevFooter", prevFooter (g_heapBase), heapZero);
   printPtrDiff ("nextHeader", nextHeader (g_heapBase), heapZero);
-  // address twoWordBlock = nextBlock (g_heapBase); 
-  // printPtrDiff ("prevBlock", prevBlock (twoWordBlock), heapZero);
+  address twoWordBlock = nextBlock (g_heapBase); 
+  printPtrDiff ("prevBlock", prevBlock (twoWordBlock), heapZero);
+  printf ("%s: %u\n", "sizeOf", sizeOf (twoWordBlock));
 
-  printf ("%s: %d\n", "isAllocated", isAllocated (g_heapBase)); 
+  //toggleBlock (g_heapBase);
+  printf ("%s: %d\n", "isAllocated", isAllocated (g_heapBase));
   printf ("%s: %u\n", "sizeOf", sizeOf (g_heapBase));
 
-  // Canonical loop to traverse all blocks
-  // printf ("All blocks\n"); 
-  // for (address p = g_heapBase; sizeOf (p) != 0; p = nextBlock (p))
-  // {
-  //     printBlock (p);
-  // }
+  //Canonical loop to traverse all blocks
+  printf ("All blocks\n"); 
+  for (address p = g_heapBase; sizeOf (p) != 0; p = nextBlock (p))
+  {
+      printBlock (p);
+  }
   
   return 0;
 }
