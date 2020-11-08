@@ -158,7 +158,10 @@ prevBlock (address p)
 static inline void
 makeBlock (address p, uint32_t t, bool b)
 {
-
+  tag* headerTag = header (p);
+  *headerTag = t | b;
+  tag* footerTag = footer (p);
+  *footerTag = t | b;
 }
 
 static inline void
@@ -190,18 +193,20 @@ main ()
   // Each line is a DWORD
   //        Word      0       1
   //                 ====  ===========
-  tag heapZero[] = 
-    { 0, 0, 1, 4 | 1, 0, 0, 0, 0, 0,  
-      0, 4 | 1, 2 | 0, 0, 0, 2 | 0, 1}; 
-  //tag heapZero[16] = { 0 }; 
+  // tag heapZero[] = 
+  //   { 0, 0, 1, 4 | 1, 0, 0, 0, 0, 0,  
+  //     0, 4 | 1, 2 | 0, 0, 0, 2 | 0, 1}; 
+  tag heapZero[24] = { 0 }; 
   // Point to DWORD 1 (DWORD 0 has no space before it)
   address g_heapBase = (address) heapZero + DWORD_SIZE;
 
-  //makeBlock (g_heapBase, 6 | 0);
-  //*prevFooter (g_heapBase) = 0 | 1;
-  //*nextHeader (g_heapBase) = 1;
-  //makeBlock (g_heapBase, 4 | 1);
-  //makeBlock (nextBlock (g_heapBase), 2); 
+  makeBlock (g_heapBase, 6, 0);
+  *prevFooter (g_heapBase) = 0 | 1;
+  *nextHeader (g_heapBase) = 1;
+  makeBlock (g_heapBase, 4 , 1);
+  makeBlock (nextBlock (g_heapBase), 2, 0); 
+  address lastBlock = nextBlock(nextBlock (g_heapBase));
+  makeBlock(lastBlock, 4, 1);
   printPtrDiff ("header", header (g_heapBase), heapZero);
   printPtrDiff ("footer", footer (g_heapBase), heapZero);
   printPtrDiff ("nextBlock", nextBlock (g_heapBase), heapZero);
@@ -209,11 +214,12 @@ main ()
   printPtrDiff ("nextHeader", nextHeader (g_heapBase), heapZero);
   address twoWordBlock = nextBlock (g_heapBase); 
   printPtrDiff ("prevBlock", prevBlock (twoWordBlock), heapZero);
-  printf ("%s: %u\n", "sizeOf", sizeOf (twoWordBlock));
 
   //toggleBlock (g_heapBase);
   printf ("%s: %d\n", "isAllocated", isAllocated (g_heapBase));
-  printf ("%s: %u\n", "sizeOf", sizeOf (g_heapBase));
+  printf ("%s: %u\n", "sizeOf Block", sizeOf (g_heapBase));
+  printf ("%s: %u\n", "sizeOf nextBlock", sizeOf (twoWordBlock));
+  printf ("%s: %u\n", "sizeOf lastBlock", sizeOf (lastBlock));
 
   //Canonical loop to traverse all blocks
   printf ("All blocks\n"); 
