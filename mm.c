@@ -123,7 +123,7 @@ isAllocated (address p)
 static inline uint32_t
 sizeOf (address p)
 {
-  return (*header (p) & ~0x1);
+  return (*header (p) & (uint32_t)~0x1);
 }
 
 /* returns footer address given basePtr */
@@ -153,14 +153,14 @@ prevFooter (address p)
 static inline tag*
 nextHeader (address p)
 {
-  return (tag*) (p + ((sizeOf (p) * WORD_SIZE) - TAG_SIZE));
+  return (tag*)(p + ((sizeOf (p) * WORD_SIZE) - TAG_SIZE));
 }
 
 /* gives the basePtr of prev block */
 static inline address
 prevBlock (address p)
 {
-  return p - (*prevFooter (p) & ~0x2);
+  return p - (sizeOf((address) header (p)) * WORD_SIZE);
 }
 
 /* basePtr, size, allocated */
@@ -206,42 +206,42 @@ main ()
   //           Word      0       1
   //                    ====  ============
   // tag heapZero[] = {
-  //                    0, 0, 1    , 4 | 1,
-  //                    0, 0, 0    ,     0, 
-  //                    0, 0, 4 | 1, 2 | 0,
-  //                    0, 0, 2 | 0,     1
-  //                  }; 
-  tag heapZero[24] = { 0 }; 
+  //                   0, 0, 1    , 4 | 1,
+  //                   0, 0, 0    ,     0,
+  //                   0, 0, 4 | 1, 2 | 0,
+  //                   0, 0, 2 | 0,     1
+  //                 };
+  tag heapZero[24] = {0};
   // Point to DWORD 1 (DWORD 0 has no space before it)
-  address g_heapBase = (address) heapZero + DWORD_SIZE;
+  address g_heapBase = (address)heapZero + DWORD_SIZE;
 
   makeBlock (g_heapBase, 6, 0);
   *prevFooter (g_heapBase) = 0 | 1;
   *nextHeader (g_heapBase) = 1;
-  makeBlock (g_heapBase, 4 , 1);
-  makeBlock (nextBlock (g_heapBase), 2, 0); 
-  address lastBlock = nextBlock(nextBlock (g_heapBase));
-  makeBlock(lastBlock, 4, 1);
+  makeBlock (g_heapBase, 4, 1);
+  makeBlock (nextBlock (g_heapBase), 2, 0);
+  address lastBlock = nextBlock (nextBlock (g_heapBase));
+  makeBlock (lastBlock, 4, 1);
   printPtrDiff ("header", header (g_heapBase), heapZero);
   printPtrDiff ("footer", footer (g_heapBase), heapZero);
   printPtrDiff ("nextBlock", nextBlock (g_heapBase), heapZero);
   printPtrDiff ("prevFooter", prevFooter (g_heapBase), heapZero);
   printPtrDiff ("nextHeader", nextHeader (g_heapBase), heapZero);
-  address twoWordBlock = nextBlock (g_heapBase); 
+  address twoWordBlock = nextBlock (g_heapBase);
   printPtrDiff ("prevBlock", prevBlock (twoWordBlock), heapZero);
 
-  //toggleBlock (g_heapBase);
+  // toggleBlock (g_heapBase);
   printf ("%s: %d\n", "isAllocated", isAllocated (g_heapBase));
   printf ("%s: %u\n", "sizeOf Block", sizeOf (g_heapBase));
   printf ("%s: %u\n", "sizeOf nextBlock", sizeOf (twoWordBlock));
   printf ("%s: %u\n", "sizeOf lastBlock", sizeOf (lastBlock));
 
   //Canonical loop to traverse all blocks
-  printf ("All blocks\n"); 
+  printf ("All blocks\n");
   for (address p = g_heapBase; sizeOf (p) != 0; p = nextBlock (p))
   {
-      printBlock (p);
+    printBlock (p);
   }
-  
+
   return 0;
 }
