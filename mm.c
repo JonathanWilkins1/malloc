@@ -86,14 +86,14 @@ printBlock (address p);
   int mm_init (void)
 {
   // Create the empty heap
-  if (g_heapBase = mem_sbrk(4 * (WORD_SIZE * 2)) == (void*) -1)
+  if (g_heapBase = mem_sbrk(4 * DWORD_SIZE) == (void*) -1)
     return -1;
 
   *(g_heapBase + (3 * TAG_SIZE)) = 0 | 1;
-  *((address)mem_heap_hi () - TAG_SIZE) = 0 | 1;
+  *((address) mem_heap_hi () - TAG_SIZE) = 0 | 1;
   g_heapBase += DWORD_SIZE;
   *header (g_heapBase) = 6 | 0;
-  *((address)mem_heap_hi () - WORD_SIZE) = 6 | 0;
+  *((address) mem_heap_hi () - WORD_SIZE) = 6 | 0;
   mm_check();
 
   return 0;
