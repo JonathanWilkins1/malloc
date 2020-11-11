@@ -77,13 +77,17 @@ toggleBlock (address p);
 int
 mm_check (void);
 
+void*
+coalesce (void* ptr);
+
 void
 printBlock (address p);
 
-  /****************************************************************/
-  // Non-inline functions
+/****************************************************************/
+// Non-inline functions
 
-  int mm_init (void)
+int 
+mm_init (void)
 {
   // Create the empty heap
   if (g_heapBase = mem_sbrk(4 * DWORD_SIZE) == (void*) -1)
@@ -114,6 +118,18 @@ void
 mm_free (void *ptr)
 {
   fprintf(stderr, "free block at %p\n", ptr);
+  if (ptr == 0)
+  {
+    return;
+  }
+  
+  if (g_heapBase == 0)
+  {
+    mm_init ();
+  }
+
+  toggleBlock (ptr);
+  coalesce (ptr);
 }
 
 /****************************************************************/
@@ -138,6 +154,42 @@ mm_check(void)
     printf("\n");
   }
 }
+
+/****************************************************************/
+
+void*
+coalesce (void* ptr)
+{
+  bool alloc_prevBlock = isAllocated (prevBlock (ptr));
+  bool alloc_nextBlock = isAllocated (nextBlock (ptr));
+  uint32_t size = sizeOf (ptr);
+
+  if (alloc_prevBlock && alloc_nextBlock)
+  {
+    return ptr;
+  }
+  else if (alloc_prevBlock && !alloc_nextBlock)
+  {
+    size += sizeOf (nextBlock (ptr));
+    makeBlock (ptr, size, 0);
+  }
+  else if (!alloc_prevBlock && alloc_nextBlock)
+  {
+    size += sizeOf (prevBlock (ptr));
+    makeBlock (ptr, size, 0);
+    ptr = prevBlock (ptr);
+  }
+  else
+  {
+    size += (sizeOf (prevBlock (ptr)) + sizeOf (nextBlock (ptr)));
+    makeBlock (ptr, size, 0);
+    ptr = prevBlock (ptr);
+  }
+
+  return ptr;
+}
+
+/****************************************************************/
 
 /* returns header address given basePtr */
 static inline tag*
