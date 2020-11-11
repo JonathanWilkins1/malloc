@@ -26,6 +26,11 @@ typedef uint8_t  byte;
 typedef byte*    address;
 
 /****************************************************************/
+// Globals
+
+address g_heapBase;
+
+/****************************************************************/
 // Useful constants
 
 const uint8_t WORD_SIZE = sizeof (word);
@@ -38,45 +43,59 @@ const uint8_t BYTE_SIZE = sizeof (byte);
 /****************************************************************/
 // Inline functions
 
-/* returns header address given basePtr */
+
 static inline tag*
 header (address p);
-/* return true IFF block is allocated */
+
 static inline bool
 isAllocated (address p);
-/* returns size of block (words) */
+
 static inline uint32_t
 sizeOf (address p);
-/* returns footer address given basePtr */
+
 static inline tag*
 footer (address p);
-/* gives the basePtr of next block */
+
 static inline address
 nextBlock (address p);
-/* returns a pointer to the prev block’s
- footer. HINT: you will use header() */
+
 static inline tag*
 prevFooter (address p);
-/* returns a pointer to the next block’s
- header. HINT: you will use sizeOf() */
+
 static inline tag*
 nextHeader (address p);
-/* gives the basePtr of prev block */
+
 static inline address
 prevBlock (address p);
-/* basePtr, size, allocated */
+
 static inline void
 makeBlock (address p, uint32_t t, bool b);
-/* basePtr — toggles alloced/free */
+
 static inline void
 toggleBlock (address p);
 
-/****************************************************************/
-// Non-inline functions
-
 int
-mm_init (void)
+mm_check (void);
+
+void
+printBlock (address p);
+
+  /****************************************************************/
+  // Non-inline functions
+
+  int mm_init (void)
 {
+  // Create the empty heap
+  if (g_heapBase = mem_sbrk(4 * (WORD_SIZE * 2)) == (void*) -1)
+    return -1;
+
+  *(g_heapBase + (3 * TAG_SIZE)) = 0 | 1;
+  *((address)mem_heap_hi () - TAG_SIZE) = 0 | 1;
+  g_heapBase += DWORD_SIZE;
+  *header (g_heapBase) = 6 | 0;
+  *((address)mem_heap_hi () - WORD_SIZE) = 6 | 0;
+  mm_check();
+
   return 0;
 }
 
@@ -106,55 +125,77 @@ mm_realloc (void *ptr, uint32_t size)
   return NULL;
 }
 
+/****************************************************************/
 
+int
+mm_check(void)
+{
+  for (address p = g_heapBase; sizeOf (p) != 0; p = nextBlock (p))
+  {      
+    printBlock (p);
+    printf ("%s: %d\n", "isAllocated", isAllocated (p));
+    printf ("%s: %u\n", "sizeOf Block", sizeOf (p));
+    printf("\n");
+  }
+}
+
+/* returns header address given basePtr */
 static inline tag*
 header (address p)
 {
   return (tag*) (p - TAG_SIZE);
 }
 
+/* return true IFF block is allocated */
 static inline bool
 isAllocated (address p)
 {
   return *header (p) & 0x1;
-} 
+}
 
+/* returns size of block (words) */
 static inline uint32_t
 sizeOf (address p)
 {
-  return (*header (p) & ~0x1);
+  return (*header (p) & (uint32_t) ~0x1);
 }
 
+/* returns footer address given basePtr */
 static inline tag*
 footer (address p)
 {
   return nextHeader (p) - 1; 
 }
 
+/* gives the basePtr of next block */
 static inline address
 nextBlock (address p)
 {
   return (address) (nextHeader (p) + 1);
 }
 
+/* returns a pointer to the prev block’s footer. */
 static inline tag*
 prevFooter (address p)
 {
   return header (p) - 1;
 }
 
+/* returns a pointer to the next block’s header. */
 static inline tag*
 nextHeader (address p)
 {
   return (tag*) (p + ((sizeOf (p) * WORD_SIZE) - TAG_SIZE));
 }
 
+/* gives the basePtr of prev block */
 static inline address
 prevBlock (address p)
 {
   return p - (sizeOf((address) header (p)) * WORD_SIZE);
 }
 
+/* basePtr, size, allocated */
 static inline void
 makeBlock (address p, uint32_t t, bool b)
 {
@@ -164,6 +205,7 @@ makeBlock (address p, uint32_t t, bool b)
   *footerTag = t | b;
 }
 
+/* basePtr — toggles alloced/free */
 static inline void
 toggleBlock (address p)
 {
@@ -198,7 +240,7 @@ main ()
   //     0, 4 | 1, 2 | 0, 0, 0, 2 | 0, 1}; 
   tag heapZero[24] = { 0 }; 
   // Point to DWORD 1 (DWORD 0 has no space before it)
-  address g_heapBase = (address) heapZero + DWORD_SIZE;
+  g_heapBase = (address) heapZero + DWORD_SIZE;
 
   makeBlock (g_heapBase, 6, 0);
   *prevFooter (g_heapBase) = 0 | 1;
