@@ -77,8 +77,8 @@ toggleBlock (address p);
 int
 mm_check (void);
 
-void*
-coalesce (void* ptr);
+static inline address
+coalesce (address ptr);
 
 void
 printBlock (address p);
@@ -157,10 +157,11 @@ mm_check(void)
 
 /****************************************************************/
 
-void*
-coalesce (void* ptr)
+static inline address
+coalesce (address ptr)
 {
-  bool alloc_prevBlock = isAllocated (prevBlock (ptr));
+  address prev = (address) header (ptr);
+  bool alloc_prevBlock = isAllocated (prev);
   bool alloc_nextBlock = isAllocated (nextBlock (ptr));
   uint32_t size = sizeOf (ptr);
 
@@ -175,15 +176,15 @@ coalesce (void* ptr)
   }
   else if (!alloc_prevBlock && alloc_nextBlock)
   {
-    size += sizeOf (prevBlock (ptr));
+    size += sizeOf (prev);
+    ptr = prev;
     makeBlock (ptr, size, 0);
-    ptr = prevBlock (ptr);
   }
   else
   {
-    size += (sizeOf (prevBlock (ptr)) + sizeOf (nextBlock (ptr)));
+    size += (sizeOf (prev) + sizeOf (nextBlock (ptr)));
+    ptr = prev;
     makeBlock (ptr, size, 0);
-    ptr = prevBlock (ptr);
   }
 
   return ptr;
