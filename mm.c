@@ -14,8 +14,8 @@
 #include <stdbool.h>
 #include <stdint.h>
 
-//#include "memlib.h"
-//#include "mm.h"
+#include "memlib.h"
+#include "mm.h"
 
 /****************************************************************/
 // Useful type aliases
@@ -90,7 +90,7 @@ int
 mm_init (void)
 {
   // Create the empty heap
-  if (g_heapBase = mem_sbrk(4 * DWORD_SIZE) == (void*) -1)
+  if ((g_heapBase = mem_sbrk (4 * DWORD_SIZE)) == (void*)-1)
     return -1;
 
   *(g_heapBase + (3 * TAG_SIZE)) = 0 | 1;
@@ -118,14 +118,9 @@ void
 mm_free (void *ptr)
 {
   fprintf(stderr, "free block at %p\n", ptr);
-  if (ptr == 0)
+  if (ptr == 0 || !isAllocated (ptr) || g_heapBase == 0)
   {
     return;
-  }
-  
-  if (g_heapBase == 0)
-  {
-    mm_init ();
   }
 
   toggleBlock (ptr);
@@ -300,21 +295,22 @@ main ()
   *nextHeader (g_heapBase) = 1;
   makeBlock (g_heapBase, 4 , 1);
   makeBlock (nextBlock (g_heapBase), 2, 0); 
-  address lastBlock = nextBlock(nextBlock (g_heapBase));
-  makeBlock(lastBlock, 4, 1);
-  printPtrDiff ("header", header (g_heapBase), heapZero);
-  printPtrDiff ("footer", footer (g_heapBase), heapZero);
-  printPtrDiff ("nextBlock", nextBlock (g_heapBase), heapZero);
-  printPtrDiff ("prevFooter", prevFooter (g_heapBase), heapZero);
-  printPtrDiff ("nextHeader", nextHeader (g_heapBase), heapZero);
-  address twoWordBlock = nextBlock (g_heapBase); 
-  printPtrDiff ("prevBlock", prevBlock (twoWordBlock), heapZero);
+  mm_free (g_heapBase);
+  // address lastBlock = nextBlock(nextBlock (g_heapBase));
+  // makeBlock(lastBlock, 4, 1);
+  // printPtrDiff ("header", header (g_heapBase), heapZero);
+  // printPtrDiff ("footer", footer (g_heapBase), heapZero);
+  // printPtrDiff ("nextBlock", nextBlock (g_heapBase), heapZero);
+  // printPtrDiff ("prevFooter", prevFooter (g_heapBase), heapZero);
+  // printPtrDiff ("nextHeader", nextHeader (g_heapBase), heapZero);
+  // address twoWordBlock = nextBlock (g_heapBase); 
+  // printPtrDiff ("prevBlock", prevBlock (twoWordBlock), heapZero);
 
   //toggleBlock (g_heapBase);
-  printf ("%s: %d\n", "isAllocated", isAllocated (g_heapBase));
-  printf ("%s: %u\n", "sizeOf Block", sizeOf (g_heapBase));
-  printf ("%s: %u\n", "sizeOf nextBlock", sizeOf (twoWordBlock));
-  printf ("%s: %u\n", "sizeOf lastBlock", sizeOf (lastBlock));
+  // printf ("%s: %d\n", "isAllocated", isAllocated (g_heapBase));
+  // printf ("%s: %u\n", "sizeOf Block", sizeOf (g_heapBase));
+  // printf ("%s: %u\n", "sizeOf nextBlock", sizeOf (twoWordBlock));
+  // printf ("%s: %u\n", "sizeOf lastBlock", sizeOf (lastBlock));
 
   //Canonical loop to traverse all blocks
   printf ("All blocks\n"); 
