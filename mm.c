@@ -26,6 +26,11 @@ typedef uint8_t byte;
 typedef byte* address;
 
 /****************************************************************/
+// Globals
+
+address g_heapBase;
+
+/****************************************************************/
 // Useful constants
 
 const uint8_t WORD_SIZE = sizeof (word);
@@ -68,12 +73,30 @@ makeBlock (address p, uint32_t t, bool b);
 static inline void
 toggleBlock (address p);
 
+int
+mm_check (void);
+
+void
+printBlock (address p);
+
 /****************************************************************/
 // Non-inline functions
 
 int
 mm_init (void)
 {
+  if ((g_heapBase = mem_sbrk (8 * WORD_SIZE)) == (void*)-1)
+  {
+    return -1;
+  }
+  // makeBlock (g_heapBase + (3 * TAG_SIZE), 0, 1);
+  // makeBlock (g_heapBase, 8 * WORD_SIZE, 0);
+  *(g_heapBase + (3 * TAG_SIZE)) = 0 | 1;
+  *((address)mem_heap_hi () - TAG_SIZE) = 0 | 1;
+  g_heapBase += DWORD_SIZE;
+  *header (g_heapBase) = (6) | 0;
+  *((address)mem_heap_hi () - WORD_SIZE) = (6) | 0;
+  mm_check();
   return 0;
 }
 
@@ -105,6 +128,21 @@ mm_realloc (void* ptr, uint32_t size)
 
 /****************************************************************/
 
+int
+mm_check (void)
+{
+  for (address p = g_heapBase; sizeOf (p) != 0; p = nextBlock (p))
+  {
+    printBlock (p);
+    printf ("%s: %d\n", "isAllocated", isAllocated (g_heapBase));
+    printf ("%s: %u\n", "sizeOf Block", sizeOf (g_heapBase));
+    printf ("\n");
+  }
+  return 0;
+}
+
+/****************************************************************/
+
 /* returns header address given basePtr */
 static inline tag*
 header (address p)
@@ -123,7 +161,7 @@ isAllocated (address p)
 static inline uint32_t
 sizeOf (address p)
 {
-  return (*header (p) & (uint32_t)~0x1);
+  return (*header (p) & (tag)~0x1);
 }
 
 /* returns footer address given basePtr */
@@ -160,7 +198,7 @@ nextHeader (address p)
 static inline address
 prevBlock (address p)
 {
-  return p - (sizeOf((address) header (p)) * WORD_SIZE);
+  return p - (sizeOf ((address)header (p)) * WORD_SIZE);
 }
 
 /* basePtr, size, allocated */
@@ -199,6 +237,7 @@ printBlock (address p)
   printf ("Block Addr %p; Size %u; Alloc %d\n", p, sizeOf (p), isAllocated (p));
 }
 
+/*
 int
 main ()
 {
@@ -213,7 +252,7 @@ main ()
   //                 };
   tag heapZero[24] = {0};
   // Point to DWORD 1 (DWORD 0 has no space before it)
-  address g_heapBase = (address)heapZero + DWORD_SIZE;
+  g_heapBase = (address)heapZero + DWORD_SIZE;
 
   makeBlock (g_heapBase, 6, 0);
   *prevFooter (g_heapBase) = 0 | 1;
@@ -245,3 +284,4 @@ main ()
 
   return 0;
 }
+*/
