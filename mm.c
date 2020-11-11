@@ -89,13 +89,11 @@ mm_init (void)
   {
     return -1;
   }
-  // makeBlock (g_heapBase + (3 * TAG_SIZE), 0, 1);
-  // makeBlock (g_heapBase, 8 * WORD_SIZE, 0);
-  *(g_heapBase + (3 * TAG_SIZE)) = 0 | 1;
-  *((address)mem_heap_hi () - TAG_SIZE) = 0 | 1;
   g_heapBase += DWORD_SIZE;
-  *header (g_heapBase) = (6) | 0;
-  *((address)mem_heap_hi () - WORD_SIZE) = (6) | 0;
+  *(g_heapBase - WORD_SIZE) = 0 | 1;
+  *((address)mem_heap_hi () - TAG_SIZE) = 0 | 1;
+  *header (g_heapBase) = 6 | 0;
+  *((address)mem_heap_hi () - WORD_SIZE) = 6 | 0;
   mm_check();
   return 0;
 }
