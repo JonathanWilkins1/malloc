@@ -78,12 +78,6 @@ mm_check (void);
 static inline address
 coalesce (address ptr);
 
-void
-printBlock (address p);
-
-void
-printPtrDiff (const char* header, void* p, void* base);
-
 /****************************************************************/
 // Non-inline functions
 
@@ -99,7 +93,7 @@ mm_init (void)
   *((address)mem_heap_hi () - TAG_SIZE) = 0 | 1;
   *header (g_heapBase) = 6 | 0;
   *((address)mem_heap_hi () - WORD_SIZE) = 6 | 0;
-  mm_check();
+  mm_check ();
   return 0;
 }
 
@@ -142,15 +136,79 @@ int
 mm_check (void)
 {
   address temp = g_heapBase;
-  // bool isPrevAlloc = false;
-  printf ("Header sentinel tag: %d | %d\n", sizeOf (temp - TAG_SIZE), isAllocated (temp - TAG_SIZE));
+  // Check if header sentinel tag is correct
+  address afterSentTag = (address)header (temp);
+  if (sizeOf (afterSentTag) != 0 || isAllocated (afterSentTag) != 1)
+  {
+    fprintf (stderr, "Beginning sentinel tag is not set up correctly\n");
+    fprintf (stderr, "Expected: %u | %u - Actual: %u | %u\n",
+            0, 1, sizeOf (afterSentTag), isAllocated (afterSentTag));
+    return 0;
+  }
 
   for (; sizeOf (temp) != 0; temp = nextBlock (temp))
   {
-    printBlock (temp);
+    // Check if block is aligned to a DWORD
+    if ((uint64_t)temp % DWORD_SIZE)
+    {
+      fprintf (stderr, "Block at address %u is not aligned correctly\n", temp);
+      fprintf (stderr, "Block is %u bytes off of a double word boundary\n",
+              (uint64_t)temp % DWORD_SIZE);
+      return 0;
+    }
+    // Check if header and footer tags match
+    if ((*header (temp)) != (*footer (temp)))
+    {
+      fprintf (stderr, "Header and footer tag for block address %u do not match\n", temp);
+      fprintf (stderr, "Expected: %u | %u - Actual: %u | %u\n", sizeOf (temp),
+              isAllocated (temp), sizeOf (nextBlock (temp) - TAG_SIZE),
+              isAllocated (nextBlock (temp) - TAG_SIZE));
+      return 0;
+    }
+    // Check if coalescing is correct
+    if (!isAllocated (temp))
+    {
+      bool alloc_prevBlock = isAllocated ((address)header (temp));
+      bool alloc_nextBlock = isAllocated (nextBlock (temp));
+      // Print the general error message for coalescing once instead of in every case
+      if (!alloc_nextBlock || !alloc_prevBlock)
+        fprintf (stderr, "Block at address %u was not coalesced correctly\n", temp);
+      if (alloc_prevBlock && !alloc_nextBlock)
+      {
+        // Triggers when this block and next block are both not allocated
+        fprintf (stderr, "Should have coalesced with next block\n");
+        return 0;
+      }
+      else if (!alloc_prevBlock && alloc_nextBlock)
+      {
+        // Triggers when this block and previous block are both not allocated
+        // Should never reach here because the previous block would trigger the
+        //  alloc_prevBlock && !alloc_nextBlock case and return, or the sentinel
+        //  block would not be correct and the check for the header sentinel tag
+        //  would have already triggered and returned
+        fprintf (stderr, "Should have coalesced with previous block\n");
+        return 0;
+      }
+      else if (!alloc_prevBlock && !alloc_nextBlock)
+      {
+        // Triggers when this block, the previous block, and the next block are
+        //  not allocated
+        // Should never reach here because the previous block would trigger the
+        //  alloc_prevBlock && !alloc_nextBlock case and return
+        fprintf (stderr, "Should have coalesced with both surrounding blocks\n");
+        return 0;
+      }
+    }
   }
 
-  printf ("Footer sentinel tag: %d | %d\n", sizeOf (temp - TAG_SIZE), isAllocated (temp - TAG_SIZE));
+  // Check footer sentinel tag is correct
+  if (sizeOf (temp) != 0 || isAllocated (temp) != 1)
+  {
+    fprintf (stderr, "Ending sentinel tag is not set up correctly\n");
+    fprintf (stderr, "Expected: %u | %u - Actual: %u | %u\n",
+      0, 1, sizeOf (temp), isAllocated (temp));
+    return 0;
+  }
   return 1;
 }
 
@@ -285,7 +343,6 @@ printBlock (address p)
   printf ("Block Addr %p; Size %u; Alloc %d\n", p, sizeOf (p), isAllocated (p));
 }
 
-
 int
 main ()
 {
@@ -293,10 +350,10 @@ main ()
   //           Word      0       1
   //                    ====  ============
   // tag heapZero[] = {
-  //                   0, 0, 1    , 4 | 1,
-  //                   0, 0, 0    ,     0,
+  //                   0, 0, 1 , 4 | 1,
+  //                   0, 0, 0 , 0,
   //                   0, 0, 4 | 1, 2 | 0,
-  //                   0, 0, 2 | 0,     1
+  //                   0, 0, 2 | 0, 1
   //                 };
   tag heapZero[24] = {0};
   // Point to DWORD 1 (DWORD 0 has no space before it)
@@ -331,7 +388,7 @@ main ()
   {
     printBlock (p);
   }
-  mm_free(nextBlock(g_heapBase));
+  mm_free (nextBlock (g_heapBase));
   printf ("\nAll blocks\n");
   for (address p = g_heapBase; sizeOf (p) != 0; p = nextBlock (p))
   {
