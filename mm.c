@@ -148,6 +148,7 @@ mm_check(void)
     printf ("%s: %u\n", "sizeOf Block", sizeOf (p));
     printf("\n");
   }
+  return 1;
 }
 
 /****************************************************************/
@@ -171,14 +172,14 @@ coalesce (address ptr)
   }
   else if (!alloc_prevBlock && alloc_nextBlock)
   {
-    size += sizeOf (prev);
-    ptr = prev;
+    size += sizeOf (prevBlock (ptr));
+    ptr = prevBlock (ptr);
     makeBlock (ptr, size, 0);
   }
   else
   {
-    size += (sizeOf (prev) + sizeOf (nextBlock (ptr)));
-    ptr = prev;
+    size += (sizeOf (prevBlock (ptr)) + sizeOf (nextBlock (ptr)));
+    ptr = prevBlock (ptr);
     makeBlock (ptr, size, 0);
   }
 
@@ -289,13 +290,14 @@ main ()
   tag heapZero[24] = { 0 }; 
   // Point to DWORD 1 (DWORD 0 has no space before it)
   g_heapBase = (address) heapZero + DWORD_SIZE;
-
+  //mm_init ();
   makeBlock (g_heapBase, 6, 0);
   *prevFooter (g_heapBase) = 0 | 1;
   *nextHeader (g_heapBase) = 1;
-  makeBlock (g_heapBase, 4 , 1);
+  makeBlock (g_heapBase, 2 , 0);
   makeBlock (nextBlock (g_heapBase), 2, 0); 
-  mm_free (g_heapBase);
+  makeBlock (nextBlock (nextBlock (g_heapBase)), 2, 1); 
+  mm_free (nextBlock (nextBlock (g_heapBase)));
   // address lastBlock = nextBlock(nextBlock (g_heapBase));
   // makeBlock(lastBlock, 4, 1);
   // printPtrDiff ("header", header (g_heapBase), heapZero);
