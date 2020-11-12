@@ -37,7 +37,6 @@ const uint8_t WORD_SIZE = sizeof (word);
 const uint8_t TAG_SIZE = sizeof (tag);
 const uint8_t DWORD_SIZE = WORD_SIZE * 2;
 const uint8_t OVERHEAD_BYTES = TAG_SIZE * 2;
-const uint8_t BYTE_SIZE = sizeof (byte);
 // Add others...
 
 /****************************************************************/
@@ -76,8 +75,14 @@ toggleBlock (address p);
 int
 mm_check (void);
 
+static inline address
+coalesce (address ptr);
+
 void
 printBlock (address p);
+
+void
+printPtrDiff (const char* header, void* p, void* base);
 
 /****************************************************************/
 // Non-inline functions
@@ -113,6 +118,13 @@ void
 mm_free (void* ptr)
 {
   fprintf (stderr, "free block at %p\n", ptr);
+  if (ptr == 0 || !isAllocated (ptr) || g_heapBase == 0)
+  {
+    return;
+  }
+
+  toggleBlock (ptr);
+  coalesce (ptr);
 }
 
 /****************************************************************/
@@ -129,14 +141,52 @@ mm_realloc (void* ptr, uint32_t size)
 int
 mm_check (void)
 {
-  for (address p = g_heapBase; sizeOf (p) != 0; p = nextBlock (p))
+  address temp = g_heapBase;
+  // bool isPrevAlloc = false;
+  printf ("Header sentinel tag: %d | %d\n", sizeOf (temp - TAG_SIZE), isAllocated (temp - TAG_SIZE));
+
+  for (; sizeOf (temp) != 0; temp = nextBlock (temp))
   {
-    printBlock (p);
-    printf ("%s: %d\n", "isAllocated", isAllocated (g_heapBase));
-    printf ("%s: %u\n", "sizeOf Block", sizeOf (g_heapBase));
-    printf ("\n");
+    printBlock (temp);
   }
-  return 0;
+
+  printf ("Footer sentinel tag: %d | %d\n", sizeOf (temp - TAG_SIZE), isAllocated (temp - TAG_SIZE));
+  return 1;
+}
+
+/****************************************************************/
+
+static inline address
+coalesce (address ptr)
+{
+  address prev = (address)header (ptr);
+  bool alloc_prevBlock = isAllocated (prev);
+  bool alloc_nextBlock = isAllocated (nextBlock (ptr));
+  uint32_t size = sizeOf (ptr);
+
+  if (alloc_prevBlock && alloc_nextBlock)
+  {
+    return ptr;
+  }
+  else if (alloc_prevBlock && !alloc_nextBlock)
+  {
+    size += sizeOf (nextBlock (ptr));
+    makeBlock (ptr, size, 0);
+  }
+  else if (!alloc_prevBlock && alloc_nextBlock)
+  {
+    size += sizeOf (prev);
+    ptr = prev;
+    makeBlock (ptr, size, 0);
+  }
+  else
+  {
+    size += (sizeOf (prev) + sizeOf (nextBlock (ptr)));
+    ptr = prev;
+    makeBlock (ptr, size, 0);
+  }
+
+  return ptr;
 }
 
 /****************************************************************/
@@ -235,7 +285,7 @@ printBlock (address p)
   printf ("Block Addr %p; Size %u; Alloc %d\n", p, sizeOf (p), isAllocated (p));
 }
 
-/*
+
 int
 main ()
 {
@@ -251,12 +301,14 @@ main ()
   tag heapZero[24] = {0};
   // Point to DWORD 1 (DWORD 0 has no space before it)
   g_heapBase = (address)heapZero + DWORD_SIZE;
-
+  // mm_init();
   makeBlock (g_heapBase, 6, 0);
   *prevFooter (g_heapBase) = 0 | 1;
-  *nextHeader (g_heapBase) = 1;
-  makeBlock (g_heapBase, 4, 1);
-  makeBlock (nextBlock (g_heapBase), 2, 0);
+  *nextHeader (g_heapBase) = 0 | 1;
+  makeBlock (g_heapBase, 2, 0);
+  makeBlock (nextBlock (g_heapBase), 2, 1);
+  makeBlock (nextBlock (nextBlock (g_heapBase)), 2, 0);
+  /*
   address lastBlock = nextBlock (nextBlock (g_heapBase));
   makeBlock (lastBlock, 4, 1);
   printPtrDiff ("header", header (g_heapBase), heapZero);
@@ -272,9 +324,15 @@ main ()
   printf ("%s: %u\n", "sizeOf Block", sizeOf (g_heapBase));
   printf ("%s: %u\n", "sizeOf nextBlock", sizeOf (twoWordBlock));
   printf ("%s: %u\n", "sizeOf lastBlock", sizeOf (lastBlock));
-
+  */
   //Canonical loop to traverse all blocks
   printf ("All blocks\n");
+  for (address p = g_heapBase; sizeOf (p) != 0; p = nextBlock (p))
+  {
+    printBlock (p);
+  }
+  mm_free(nextBlock(g_heapBase));
+  printf ("\nAll blocks\n");
   for (address p = g_heapBase; sizeOf (p) != 0; p = nextBlock (p))
   {
     printBlock (p);
@@ -282,4 +340,3 @@ main ()
 
   return 0;
 }
-*/
