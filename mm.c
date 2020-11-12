@@ -141,8 +141,8 @@ mm_check (void)
   if (sizeOf (afterSentTag) != 0 || isAllocated (afterSentTag) != 1)
   {
     fprintf (stderr, "Beginning sentinel tag is not set up correctly\n");
-    fprintf (stderr, "Expected: %u | %u - Actual: %u | %u\n",
-            0, 1, sizeOf (afterSentTag), isAllocated (afterSentTag));
+    fprintf (stderr, "Expected: %u | %u - Actual: %u | %u\n", 0, 1,
+             sizeOf (afterSentTag), isAllocated (afterSentTag));
     return 0;
   }
 
@@ -151,18 +151,20 @@ mm_check (void)
     // Check if block is aligned to a DWORD
     if ((uint64_t)temp % DWORD_SIZE)
     {
-      fprintf (stderr, "Block at address %u is not aligned correctly\n", temp);
-      fprintf (stderr, "Block is %u bytes off of a double word boundary\n",
-              (uint64_t)temp % DWORD_SIZE);
+      fprintf (stderr, "Block at address %p is not aligned correctly\n", temp);
+      fprintf (stderr, "Block is %lu bytes off of a double word boundary\n",
+               (uint64_t)temp % DWORD_SIZE);
       return 0;
     }
     // Check if header and footer tags match
     if ((*header (temp)) != (*footer (temp)))
     {
-      fprintf (stderr, "Header and footer tag for block address %u do not match\n", temp);
-      fprintf (stderr, "Expected: %u | %u - Actual: %u | %u\n", sizeOf (temp),
-              isAllocated (temp), sizeOf (nextBlock (temp) - TAG_SIZE),
-              isAllocated (nextBlock (temp) - TAG_SIZE));
+      fprintf (stderr,
+               "Header and footer tag for block address %p do not match\n",
+               temp);
+      fprintf (stderr, "Header: %u | %u - Footer: %u | %u\n", sizeOf (temp),
+               isAllocated (temp), sizeOf (nextBlock (temp) - TAG_SIZE),
+               isAllocated (nextBlock (temp) - TAG_SIZE));
       return 0;
     }
     // Check if coalescing is correct
@@ -172,7 +174,8 @@ mm_check (void)
       bool alloc_nextBlock = isAllocated (nextBlock (temp));
       // Print the general error message for coalescing once instead of in every case
       if (!alloc_nextBlock || !alloc_prevBlock)
-        fprintf (stderr, "Block at address %u was not coalesced correctly\n", temp);
+        fprintf (stderr, "Block at address %p was not coalesced correctly\n",
+                 temp);
       if (alloc_prevBlock && !alloc_nextBlock)
       {
         // Triggers when this block and next block are both not allocated
@@ -195,7 +198,8 @@ mm_check (void)
         //  not allocated
         // Should never reach here because the previous block would trigger the
         //  alloc_prevBlock && !alloc_nextBlock case and return
-        fprintf (stderr, "Should have coalesced with both surrounding blocks\n");
+        fprintf (stderr,
+                 "Should have coalesced with both surrounding blocks\n");
         return 0;
       }
     }
@@ -205,8 +209,8 @@ mm_check (void)
   if (sizeOf (temp) != 0 || isAllocated (temp) != 1)
   {
     fprintf (stderr, "Ending sentinel tag is not set up correctly\n");
-    fprintf (stderr, "Expected: %u | %u - Actual: %u | %u\n",
-      0, 1, sizeOf (temp), isAllocated (temp));
+    fprintf (stderr, "Expected: %u | %u - Actual: %u | %u\n", 0, 1,
+             sizeOf (temp), isAllocated (temp));
     return 0;
   }
   return 1;
@@ -234,13 +238,13 @@ coalesce (address ptr)
   else if (!alloc_prevBlock && alloc_nextBlock)
   {
     size += sizeOf (prev);
-    ptr = prev;
+    ptr = prevBlock (ptr);
     makeBlock (ptr, size, 0);
   }
   else
   {
     size += (sizeOf (prev) + sizeOf (nextBlock (ptr)));
-    ptr = prev;
+    ptr = prevBlock (ptr);
     makeBlock (ptr, size, 0);
   }
 
@@ -365,6 +369,7 @@ main ()
   makeBlock (g_heapBase, 2, 0);
   makeBlock (nextBlock (g_heapBase), 2, 1);
   makeBlock (nextBlock (nextBlock (g_heapBase)), 2, 0);
+  //mm_check();
   /*
   address lastBlock = nextBlock (nextBlock (g_heapBase));
   makeBlock (lastBlock, 4, 1);
@@ -394,6 +399,7 @@ main ()
   {
     printBlock (p);
   }
+  mm_check ();
 
   return 0;
 }
