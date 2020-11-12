@@ -90,15 +90,16 @@ int
 mm_init (void)
 {
   // Create the empty heap
-  if ((g_heapBase = mem_sbrk (4 * DWORD_SIZE)) == (void*)-1)
-    return -1;
+  mem_init();
 
-  *(g_heapBase + (3 * TAG_SIZE)) = 0 | 1;
-  *((address) mem_heap_hi () - TAG_SIZE) = 0 | 1;
+  if ((g_heapBase = mem_sbrk (4 * WORD_SIZE)) == (void*)-1)
+    return -1;
+  
   g_heapBase += DWORD_SIZE;
-  *header (g_heapBase) = 6 | 0;
-  *((address) mem_heap_hi () - WORD_SIZE) = 6 | 0;
-  mm_check();
+  *(g_heapBase - WORD_SIZE) = 0 | 1;
+  makeBlock (g_heapBase, 6, 0);
+  *nextHeader (g_heapBase) = 0 | 1;
+  //mm_check();
 
   return 0;
 }
@@ -109,6 +110,44 @@ void*
 mm_malloc (uint32_t size)
 {
   fprintf(stderr, "allocate block of size %u\n", size);
+
+  if(size == 0)
+  {
+    return NULL;
+  }
+
+  uint32_t actSize = (((size + OVERHEAD_BYTES) + (DWORD_SIZE - 1)) / DWORD_SIZE) * 2;
+  address tempPtr = NULL;
+  if(actSize > mem_heapsize ())
+  {
+    tempPtr = mem_sbrk ((int) actSize * WORD_SIZE);
+    makeBlock (tempPtr, actSize, 0);
+    *nextHeader(tempPtr) = 0 | 1;
+    coalesce (tempPtr);
+    mm_check ();
+   
+  }
+
+  for (address p = g_heapBase; sizeOf (p) != 0; p = nextBlock (p))
+  {   
+    if(actSize <= sizeOf (p) && !isAllocated (p))
+    {
+      uint32_t psize = sizeOf (p);
+      makeBlock (p, actSize, 1);
+      if(actSize < psize)
+      {
+        makeBlock(nextBlock (p), psize - actSize, 0);
+      }
+      return p;
+    }
+  }
+
+  if(tempPtr != NULL)
+  {
+    makeBlock (tempPtr, actSize, 1);
+    return tempPtr;
+  }
+
   return NULL;
 }
 
@@ -278,26 +317,26 @@ printBlock (address p)
 	  p, sizeOf (p), isAllocated (p)); 
 }
 
-int
-main ()
-{
+// int
+// main ()
+// {
   // Each line is a DWORD
   //        Word      0       1
   //                 ====  ===========
   // tag heapZero[] = 
   //   { 0, 0, 1, 4 | 1, 0, 0, 0, 0, 0,  
   //     0, 4 | 1, 2 | 0, 0, 0, 2 | 0, 1}; 
-  tag heapZero[24] = { 0 }; 
+  // tag heapZero[24] = { 0 }; 
   // Point to DWORD 1 (DWORD 0 has no space before it)
-  g_heapBase = (address) heapZero + DWORD_SIZE;
+  // g_heapBase = (address) heapZero + DWORD_SIZE;
   //mm_init ();
-  makeBlock (g_heapBase, 6, 0);
-  *prevFooter (g_heapBase) = 0 | 1;
-  *nextHeader (g_heapBase) = 1;
-  makeBlock (g_heapBase, 2 , 0);
-  makeBlock (nextBlock (g_heapBase), 2, 0); 
-  makeBlock (nextBlock (nextBlock (g_heapBase)), 2, 1); 
-  mm_free (nextBlock (nextBlock (g_heapBase)));
+  // makeBlock (g_heapBase, 6, 0);
+  // *prevFooter (g_heapBase) = 0 | 1;
+  // *nextHeader (g_heapBase) = 1;
+  // makeBlock (g_heapBase, 2 , 0);
+  // makeBlock (nextBlock (g_heapBase), 2, 0); 
+  // makeBlock (nextBlock (nextBlock (g_heapBase)), 2, 1); 
+  // mm_free (nextBlock (nextBlock (g_heapBase)));
   // address lastBlock = nextBlock(nextBlock (g_heapBase));
   // makeBlock(lastBlock, 4, 1);
   // printPtrDiff ("header", header (g_heapBase), heapZero);
@@ -315,11 +354,11 @@ main ()
   // printf ("%s: %u\n", "sizeOf lastBlock", sizeOf (lastBlock));
 
   //Canonical loop to traverse all blocks
-  printf ("All blocks\n"); 
-  for (address p = g_heapBase; sizeOf (p) != 0; p = nextBlock (p))
-  {
-      printBlock (p);
-  }
+//   printf ("All blocks\n"); 
+//   for (address p = g_heapBase; sizeOf (p) != 0; p = nextBlock (p))
+//   {
+//       printBlock (p);
+//   }
   
-  return 0;
-}
+//   return 0;
+// }
