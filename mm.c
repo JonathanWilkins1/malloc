@@ -29,6 +29,7 @@ typedef byte* address;
 // Globals
 
 address g_heapBase;
+int ind = 0;
 
 /****************************************************************/
 // Useful constants
@@ -78,22 +79,37 @@ mm_check (void);
 static inline address
 coalesce (address ptr);
 
+static inline address
+extendHeap (address p, uint32_t size);
+
+void
+printPtrDiff (const char* header, void* p, void* base);
+
+void
+printBlock (address p);
+
+void
+printAllBlocks (int run);
+
 /****************************************************************/
 // Non-inline functions
 
 int
 mm_init (void)
 {
+  mem_init ();
   if ((g_heapBase = mem_sbrk (8 * WORD_SIZE)) == (void*)-1)
   {
     return -1;
   }
   g_heapBase += DWORD_SIZE;
   *(g_heapBase - WORD_SIZE) = 0 | 1;
-  *((address)mem_heap_hi () - TAG_SIZE) = 0 | 1;
-  *header (g_heapBase) = 6 | 0;
-  *((address)mem_heap_hi () - WORD_SIZE) = 6 | 0;
-  mm_check ();
+  // *((address)mem_heap_hi () - TAG_SIZE) = 0 | 1;
+  // *header (g_heapBase) = 6 | 0;
+  // *((address)mem_heap_hi () - WORD_SIZE) = 6 | 0;
+  makeBlock (g_heapBase, 6, 0);
+  *nextHeader (g_heapBase) = 0 | 1;
+  // mm_check ();
   return 0;
 }
 
@@ -103,6 +119,53 @@ void*
 mm_malloc (uint32_t size)
 {
   fprintf (stderr, "allocate block of size %u\n", size);
+  // If size is 0, return null immediately to save time
+  if (size == 0)
+  {
+    return NULL;
+  }
+  // Calculate the number of words needed to allocate to hold 'size' bytes
+  uint32_t actSize =
+    (((size + OVERHEAD_BYTES) + (DWORD_SIZE - 1)) / DWORD_SIZE) * 2;
+  // Don't bother searching if 'actSize' words is larger than the entire space of
+  //  the heap itself
+  address p = g_heapBase;
+  // if ((actSize * 4) < (uint32_t)mem_heapsize ())
+  // {
+  // Search for the first unallocated block that can hold 'actSize' words
+  for (; sizeOf (p) != 0; p = nextBlock (p))
+  {
+    // If the block is already allocated, don't bother checking anything else with it
+    if (isAllocated (p))
+      continue;
+    // See the new block fits in the free block at p
+    if (actSize <= sizeOf (p))
+    {
+      // Make the new block into the free block at p
+      uint32_t psize = sizeOf (p);
+      makeBlock (p, actSize, 1);
+      // If the free block has more leftover space after inserting the new block,
+      //  create a new free block to hold the leftover space
+      if (actSize < psize)
+        makeBlock (nextBlock (p), psize - actSize, 0);
+      // printAllBlocks (ind++); //-------------------------------------------------------
+      return p;
+    }
+  }
+  // }
+  // else
+  // {
+  // Walk straight to the end of the heap
+  // for (; sizeOf (p) != 0; p = nextBlock (p));
+  // }
+
+  p = extendHeap (p, actSize);
+  if (p != NULL)
+  {
+    makeBlock (p, actSize, 1);
+    // printAllBlocks (ind++); //---------------------------------------------------------
+    return p;
+  }
   return NULL;
 }
 
@@ -119,6 +182,7 @@ mm_free (void* ptr)
 
   toggleBlock (ptr);
   coalesce (ptr);
+  // printAllBlocks (ind++); //-----------------------------------------------------------
 }
 
 /****************************************************************/
@@ -163,8 +227,8 @@ mm_check (void)
                "Header and footer tag for block address %p do not match\n",
                temp);
       fprintf (stderr, "Header: %u | %u - Footer: %u | %u\n", sizeOf (temp),
-               isAllocated (temp), sizeOf (nextBlock (temp) - TAG_SIZE),
-               isAllocated (nextBlock (temp) - TAG_SIZE));
+               isAllocated (temp), sizeOf ((address)nextHeader (temp)),
+               isAllocated ((address)nextHeader (temp)));
       return 0;
     }
     // Check if coalescing is correct
@@ -247,8 +311,21 @@ coalesce (address ptr)
     ptr = prevBlock (ptr);
     makeBlock (ptr, size, 0);
   }
-
   return ptr;
+}
+
+/****************************************************************/
+
+static inline address
+extendHeap (address p, uint32_t size)
+{
+  uint32_t prevSize = sizeOf (prevBlock (p));
+  uint32_t asize = isAllocated (prevBlock (p)) ? size : size - prevSize;
+  if ((p = mem_sbrk ((int)(asize * WORD_SIZE))) == (void*)-1)
+    return NULL;
+  makeBlock (p, asize, 0);
+  *nextHeader (p) = 0 | 1;
+  return coalesce (p);
 }
 
 /****************************************************************/
@@ -278,14 +355,14 @@ sizeOf (address p)
 static inline tag*
 footer (address p)
 {
-  return nextHeader (p) - 1;
+  return (tag*)(nextBlock (p) - WORD_SIZE);
 }
 
 /* gives the basePtr of next block */
 static inline address
 nextBlock (address p)
 {
-  return (address) (nextHeader (p) + 1);
+  return p + (sizeOf (p) * WORD_SIZE);
 }
 
 /* returns a pointer to the prev block’s
@@ -293,7 +370,7 @@ nextBlock (address p)
 static inline tag*
 prevFooter (address p)
 {
-  return header (p) - 1;
+  return (tag*)(p - WORD_SIZE);
 }
 
 /* returns a pointer to the next block’s
@@ -301,7 +378,7 @@ prevFooter (address p)
 static inline tag*
 nextHeader (address p)
 {
-  return (tag*)(p + ((sizeOf (p) * WORD_SIZE) - TAG_SIZE));
+  return (tag*)(nextBlock (p) - TAG_SIZE);
 }
 
 /* gives the basePtr of prev block */
@@ -315,20 +392,16 @@ prevBlock (address p)
 static inline void
 makeBlock (address p, tag t, bool b)
 {
-  tag* headerTag = header (p);
-  *headerTag = t | b;
-  tag* footerTag = footer (p);
-  *footerTag = t | b;
+  *header (p) = t | b;
+  *footer (p) = t | b;
 }
 
 /* basePtr — toggles alloced/free */
 static inline void
 toggleBlock (address p)
 {
-  tag* headerTag = header (p);
-  *headerTag = (sizeOf (p) | !isAllocated (p));
-  tag* footerTag = footer (p);
-  *footerTag = (sizeOf (p) | !isAllocated (p));
+  *header (p) = (sizeOf (p) | !isAllocated (p));
+  *footer (p) = (sizeOf (p) | isAllocated (p));
 }
 
 /****************************************************************/
@@ -344,9 +417,23 @@ printPtrDiff (const char* header, void* p, void* base)
 void
 printBlock (address p)
 {
-  printf ("Block Addr %p; Size %u; Alloc %d\n", p, sizeOf (p), isAllocated (p));
+  printf (/*"Block Addr %p;*/ "Size %u; Alloc %d\n", /*p,*/ sizeOf (p),
+          isAllocated (p));
 }
 
+void
+printAllBlocks (int run)
+{
+  printf ("All blocks (%d)\n", run);
+  for (address p = g_heapBase; sizeOf (p) != 0; p = nextBlock (p))
+  {
+    printBlock (p);
+  }
+  mm_check ();
+  printf ("\n");
+}
+
+/*
 int
 main ()
 {
@@ -359,47 +446,23 @@ main ()
   //                   0, 0, 4 | 1, 2 | 0,
   //                   0, 0, 2 | 0, 1
   //                 };
-  tag heapZero[24] = {0};
+  // tag heapZero[24] = {0};
   // Point to DWORD 1 (DWORD 0 has no space before it)
-  g_heapBase = (address)heapZero + DWORD_SIZE;
-  // mm_init();
-  makeBlock (g_heapBase, 6, 0);
-  *prevFooter (g_heapBase) = 0 | 1;
-  *nextHeader (g_heapBase) = 0 | 1;
-  makeBlock (g_heapBase, 2, 0);
-  makeBlock (nextBlock (g_heapBase), 2, 1);
-  makeBlock (nextBlock (nextBlock (g_heapBase)), 2, 0);
-  //mm_check();
-  /*
-  address lastBlock = nextBlock (nextBlock (g_heapBase));
-  makeBlock (lastBlock, 4, 1);
-  printPtrDiff ("header", header (g_heapBase), heapZero);
-  printPtrDiff ("footer", footer (g_heapBase), heapZero);
-  printPtrDiff ("nextBlock", nextBlock (g_heapBase), heapZero);
-  printPtrDiff ("prevFooter", prevFooter (g_heapBase), heapZero);
-  printPtrDiff ("nextHeader", nextHeader (g_heapBase), heapZero);
-  address twoWordBlock = nextBlock (g_heapBase);
-  printPtrDiff ("prevBlock", prevBlock (twoWordBlock), heapZero);
-
-  // toggleBlock (g_heapBase);
-  printf ("%s: %d\n", "isAllocated", isAllocated (g_heapBase));
-  printf ("%s: %u\n", "sizeOf Block", sizeOf (g_heapBase));
-  printf ("%s: %u\n", "sizeOf nextBlock", sizeOf (twoWordBlock));
-  printf ("%s: %u\n", "sizeOf lastBlock", sizeOf (lastBlock));
-  */
-  //Canonical loop to traverse all blocks
-  printf ("All blocks\n");
-  for (address p = g_heapBase; sizeOf (p) != 0; p = nextBlock (p))
-  {
-    printBlock (p);
-  }
-  mm_free (nextBlock (g_heapBase));
-  printf ("\nAll blocks\n");
-  for (address p = g_heapBase; sizeOf (p) != 0; p = nextBlock (p))
-  {
-    printBlock (p);
-  }
-  mm_check ();
-
+  // g_heapBase = (address)heapZero + DWORD_SIZE;
+  ind = 0;
+  mm_init ();
+  address p0 = mm_malloc (2040);
+  address p1 = mm_malloc (2040);
+  mm_free (p1);
+  address p2 = mm_malloc (48);
+  address p3 = mm_malloc (4072);
+  mm_free (p3);
+  address p4 = mm_malloc (4072);
+  mm_free (p0);
+  mm_free (p2);
+  address p5 = mm_malloc (4072);
+  mm_free (p4);
+  mm_free (p5);
   return 0;
 }
+*/
