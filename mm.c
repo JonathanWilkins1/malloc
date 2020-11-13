@@ -80,6 +80,9 @@ mm_check (void);
 static inline address
 coalesce (address ptr);
 
+static inline address
+extendHeap (address p, uint32_t size);
+
 void
 printBlock (address p);
 
@@ -99,7 +102,6 @@ mm_init (void)
   *(g_heapBase - WORD_SIZE) = 0 | 1;
   makeBlock (g_heapBase, 6, 0);
   *nextHeader (g_heapBase) = 0 | 1;
-  //mm_check();
 
   return 0;
 }
@@ -116,39 +118,37 @@ mm_malloc (uint32_t size)
     return NULL;
   }
 
-  uint32_t actSize = (((size + OVERHEAD_BYTES) + (DWORD_SIZE - 1)) / DWORD_SIZE) * 2;
-  address tempPtr = NULL;
-  if(actSize > mem_heapsize ())
-  {
-    tempPtr = mem_sbrk ((int) actSize * WORD_SIZE);
-    makeBlock (tempPtr, actSize, 0);
-    *nextHeader(tempPtr) = 0 | 1;
-    coalesce (tempPtr);
-    mm_check ();
-   
-  }
+  uint32_t actSize = (((size + OVERHEAD_BYTES) + (DWORD_SIZE - 1)) / DWORD_SIZE) * 2; 
 
-  for (address p = g_heapBase; sizeOf (p) != 0; p = nextBlock (p))
-  {   
-    if(actSize <= sizeOf (p) && !isAllocated (p))
+  address p = g_heapBase;
+  while (sizeOf (p) != 0)
+  {
+    if(!isAllocated (p))
     {
-      uint32_t psize = sizeOf (p);
-      makeBlock (p, actSize, 1);
-      if(actSize < psize)
+      if (actSize == sizeOf (p))
       {
-        makeBlock(nextBlock (p), psize - actSize, 0);
+        toggleBlock (p);
+        return p;
       }
-      return p;
+      else if (actSize < sizeOf (p) && (sizeOf(p) - actSize) >= 2)
+      {
+        uint32_t psize = sizeOf (p);
+        makeBlock (p, actSize, 1);
+        makeBlock(nextBlock (p), psize - actSize, 0);
+        return p;
+      }
     }
+    p = nextBlock (p);
   }
 
-  if(tempPtr != NULL)
+  p = extendHeap (p, actSize);
+  if(p == NULL)
   {
-    makeBlock (tempPtr, actSize, 1);
-    return tempPtr;
+    return NULL;
   }
+  makeBlock (p, actSize, 1);
 
-  return NULL;
+  return p;
 }
 
 /****************************************************************/
@@ -183,8 +183,8 @@ mm_check(void)
   for (address p = g_heapBase; sizeOf (p) != 0; p = nextBlock (p))
   {      
     printBlock (p);
-    printf ("%s: %d\n", "isAllocated", isAllocated (p));
     printf ("%s: %u\n", "sizeOf Block", sizeOf (p));
+    printf ("%s: %d\n", "isAllocated", isAllocated (p));
     printf("\n");
   }
   return 1;
@@ -227,6 +227,23 @@ coalesce (address ptr)
 
 /****************************************************************/
 
+static inline address
+extendHeap (address p, uint32_t size)
+{
+  uint32_t asize = size;
+  if(!isAllocated (prevBlock (p)))
+  {
+    asize = (size - sizeOf (prevBlock (p)));
+  }
+
+  if((p = mem_sbrk  ((int) asize * WORD_SIZE)) == (void*)-1)
+    return (void*)-1;
+  makeBlock (p, asize, 0);
+  *nextHeader (p) = 0 | 1;
+  return coalesce (p);
+}
+
+/****************************************************************/
 /* returns header address given basePtr */
 static inline tag*
 header (address p)
@@ -259,21 +276,21 @@ footer (address p)
 static inline address
 nextBlock (address p)
 {
-  return (address) (nextHeader (p) + 1);
+  return (p + ((sizeOf (p) * WORD_SIZE)));
 }
 
 /* returns a pointer to the prev block’s footer. */
 static inline tag*
 prevFooter (address p)
 {
-  return header (p) - 1;
+  return (tag*) (p - WORD_SIZE);
 }
 
 /* returns a pointer to the next block’s header. */
 static inline tag*
 nextHeader (address p)
 {
-  return (tag*) (p + ((sizeOf (p) * WORD_SIZE) - TAG_SIZE));
+  return header (nextBlock (p));
 }
 
 /* gives the basePtr of prev block */
@@ -287,20 +304,16 @@ prevBlock (address p)
 static inline void
 makeBlock (address p, uint32_t t, bool b)
 {
-  tag* headerTag = header (p);
-  *headerTag = t | b;
-  tag* footerTag = footer (p);
-  *footerTag = t | b;
+  *header (p) = t | b;
+  *footer (p) = t | b;
 }
 
 /* basePtr — toggles alloced/free */
 static inline void
 toggleBlock (address p)
 {
-  tag* headerTag = header (p);
-  *headerTag = (sizeOf (p) | !isAllocated (p));
-  tag* footerTag = footer (p);
-  *footerTag = (sizeOf (p) | !isAllocated (p));
+  *header (p) = (sizeOf (p) | !isAllocated (p));
+  *footer (p) = (sizeOf (p) | !isAllocated (p));
 }
 
 
@@ -359,6 +372,10 @@ printBlock (address p)
 //   {
 //       printBlock (p);
 //   }
-  
+
+//   mm_init ();
+//   mm_malloc (2040);
+//   mm_check ();
+
 //   return 0;
 // }
