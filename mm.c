@@ -190,53 +190,15 @@ mm_free (void* ptr)
 void*
 mm_realloc (void* ptr, uint32_t size)
 {
-  /*
-  // fprintf (stderr, "realloc block at %p to %u\n", ptr, size);
   if (ptr == NULL)
+  {
     return mm_malloc (size);
-  else if (size == 0)
-  {
-    mm_free (ptr);
-    return NULL;
   }
-  // Calculate the number of words the same way as in mm_malloc
-  uint32_t actSize =
-    (((size + OVERHEAD_BYTES) + (DWORD_SIZE - 1)) / DWORD_SIZE) * 2;
 
-  // Call these only once to reuse the output and save time
-  uint32_t prevSize = sizeOf (ptr);
-
-  // If the size is the same just toggle the block and return the same pointer
-  if (actSize == prevSize)
-  {
-    return ptr;
-  }
-  // The new size is smaller than the original, so just make a smaller block out
-  //  of the original block and return a pointer to the new block
-  else if (actSize < prevSize)
-  {
-    makeBlock (ptr, actSize, 1);
-    makeBlock (nextBlock (ptr), size - actSize, 0);
-    return ptr;
-  }
-  // The new size is bigger than the
-  else
-  {
-    address newPtr = mm_malloc(actSize);
-    memcpy (newPtr, ptr, prevSize * WORD_SIZE);
-    mm_free (ptr);
-    return newPtr;
-  }
- */
   if (size == 0)
   {
     mm_free (ptr);
     return NULL;
-  }
-
-  if (ptr == NULL)
-  {
-    return mm_malloc (size);
   }
 
   address newPtr = mm_malloc (size);
