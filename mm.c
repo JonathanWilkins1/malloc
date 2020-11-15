@@ -29,7 +29,7 @@ typedef byte* address;
 // Globals
 
 address g_heapBase;
-int ind = 0;
+// int ind = 0;
 
 /****************************************************************/
 // Useful constants
@@ -118,7 +118,7 @@ mm_init (void)
 void*
 mm_malloc (uint32_t size)
 {
-  fprintf (stderr, "allocate block of size %u\n", size);
+  // fprintf (stderr, "allocate block of size %u\n", size);
   // If size is 0, return null immediately to save time
   if (size == 0)
   {
@@ -174,7 +174,7 @@ mm_malloc (uint32_t size)
 void
 mm_free (void* ptr)
 {
-  fprintf (stderr, "free block at %p\n", ptr);
+  // fprintf (stderr, "free block at %p\n", ptr);
   if (ptr == 0 || !isAllocated (ptr) || g_heapBase == 0)
   {
     return;
@@ -190,8 +190,42 @@ mm_free (void* ptr)
 void*
 mm_realloc (void* ptr, uint32_t size)
 {
-  fprintf (stderr, "realloc block at %p to %u\n", ptr, size);
-  return NULL;
+  // fprintf (stderr, "realloc block at %p to %u\n", ptr, size);
+  if (ptr == NULL)
+    return mm_malloc (size);
+  else if (size == 0)
+  {
+    mm_free (ptr);
+    return NULL;
+  }
+  // Calculate the number of words the same way as in mm_malloc
+  uint32_t actSize =
+    (((size + OVERHEAD_BYTES) + (DWORD_SIZE - 1)) / DWORD_SIZE) * 2;
+
+  // Call these only once to reuse the output and save time
+  bool isNextAlloc = isAllocated (nextBlock (ptr));
+  uint32_t prevSize = sizeOf (ptr);
+
+  // If the size is the same just toggle the block and return the same pointer
+  if (actSize == prevSize)
+  {
+    return ptr;
+  }
+  // The new size is smaller than the original, so just make a smaller block out
+  //  of the original block and return a pointer to the new block
+  else if (actSize < prevSize)
+  {
+    makeBlock (ptr, actSize, 1);
+    makeBlock (nextBlock (ptr), size - actSize, 0);
+    return ptr;
+  }
+  // The new size is bigger than the
+  else
+  {
+    for (; isAllocated (ptr - TAG_SIZE) == 0; ptr = prevBlock (ptr))
+      ;
+    return ptr;
+  }
 }
 
 /****************************************************************/
@@ -285,7 +319,7 @@ mm_check (void)
 static inline address
 coalesce (address ptr)
 {
-  address prev = (address)header (ptr);
+  address prev = ptr - TAG_SIZE;
   bool alloc_prevBlock = isAllocated (prev);
   bool alloc_nextBlock = isAllocated (nextBlock (ptr));
   uint32_t size = sizeOf (ptr);
