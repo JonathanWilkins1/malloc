@@ -82,8 +82,7 @@ coalesce (address ptr);
 static inline address
 extendHeap (address p, uint32_t size);
 
-void
-printPtrDiff (const char* header, void* p, void* base);
+void printPtrDiff (const char* header, void* p, void* base);
 
 void
 printBlock (address p);
@@ -94,10 +93,9 @@ printAllBlocks (int run);
 /****************************************************************/
 // Non-inline functions
 
-int
-mm_init (void)
+int mm_init (void)
 {
-  mem_init ();
+  mem_init();
   if ((g_heapBase = mem_sbrk (8 * WORD_SIZE)) == (void*)-1)
   {
     return -1;
@@ -132,32 +130,33 @@ mm_malloc (uint32_t size)
   address p = g_heapBase;
   // if ((actSize * 4) < (uint32_t)mem_heapsize ())
   // {
-  // Search for the first unallocated block that can hold 'actSize' words
-  for (; sizeOf (p) != 0; p = nextBlock (p))
-  {
-    // If the block is already allocated, don't bother checking anything else with it
-    if (isAllocated (p))
-      continue;
-    // See the new block fits in the free block at p
-    if (actSize <= sizeOf (p))
+    // Search for the first unallocated block that can hold 'actSize' words
+    for (; sizeOf (p) != 0; p = nextBlock (p))
     {
-      // Make the new block into the free block at p
-      uint32_t psize = sizeOf (p);
-      makeBlock (p, actSize, 1);
-      // If the free block has more leftover space after inserting the new block,
-      //  create a new free block to hold the leftover space
-      if (actSize < psize)
-        makeBlock (nextBlock (p), psize - actSize, 0);
-      // printAllBlocks (ind++); //-------------------------------------------------------
-      return p;
+      // If the block is already allocated, don't bother checking anything else with it
+      if (isAllocated (p))
+        continue;
+      // See the new block fits in the free block at p
+      if (actSize <= sizeOf (p))
+      {
+        // Make the new block into the free block at p
+        uint32_t psize = sizeOf (p);
+        makeBlock (p, actSize, 1);
+        // If the free block has more leftover space after inserting the new block,
+        //  create a new free block to hold the leftover space
+        if (actSize < psize)
+          makeBlock (nextBlock (p), psize - actSize, 0);
+        // printAllBlocks (ind++); //-------------------------------------------------------
+        return p;
+      }
     }
-  }
   // }
   // else
   // {
-  // Walk straight to the end of the heap
-  // for (; sizeOf (p) != 0; p = nextBlock (p));
+    // Walk straight to the end of the heap
+    // for (; sizeOf (p) != 0; p = nextBlock (p));
   // }
+  
 
   p = extendHeap (p, actSize);
   if (p != NULL)
@@ -203,7 +202,6 @@ mm_realloc (void* ptr, uint32_t size)
     (((size + OVERHEAD_BYTES) + (DWORD_SIZE - 1)) / DWORD_SIZE) * 2;
 
   // Call these only once to reuse the output and save time
-  bool isNextAlloc = isAllocated (nextBlock (ptr));
   uint32_t prevSize = sizeOf (ptr);
 
   // If the size is the same just toggle the block and return the same pointer
@@ -219,12 +217,19 @@ mm_realloc (void* ptr, uint32_t size)
     makeBlock (nextBlock (ptr), size - actSize, 0);
     return ptr;
   }
-  // The new size is bigger than the
+  // The new size is bigger than the 
   else
   {
-    for (; isAllocated (ptr - TAG_SIZE) == 0; ptr = prevBlock (ptr))
-      ;
-    return ptr;
+    if (!isAllocated (nextBlock (ptr)))
+    {
+      makeBlock (ptr, actSize, 1);
+      makeBlock (nextBlock (ptr), size - actSize, 0);
+      return ptr;
+    }
+    else
+    {
+      return mm_malloc (size);
+    }
   }
 }
 
@@ -239,8 +244,8 @@ mm_check (void)
   if (sizeOf (afterSentTag) != 0 || isAllocated (afterSentTag) != 1)
   {
     fprintf (stderr, "Beginning sentinel tag is not set up correctly\n");
-    fprintf (stderr, "Expected: %u | %u - Actual: %u | %u\n", 0, 1,
-             sizeOf (afterSentTag), isAllocated (afterSentTag));
+    fprintf (stderr, "Expected: %u | %u - Actual: %u | %u\n",
+              0, 1, sizeOf (afterSentTag), isAllocated (afterSentTag));
     return 0;
   }
 
@@ -251,18 +256,16 @@ mm_check (void)
     {
       fprintf (stderr, "Block at address %p is not aligned correctly\n", temp);
       fprintf (stderr, "Block is %lu bytes off of a double word boundary\n",
-               (uint64_t)temp % DWORD_SIZE);
+                (uint64_t)temp % DWORD_SIZE);
       return 0;
     }
     // Check if header and footer tags match
     if ((*header (temp)) != (*footer (temp)))
     {
-      fprintf (stderr,
-               "Header and footer tag for block address %p do not match\n",
-               temp);
+      fprintf (stderr, "Header and footer tag for block address %p do not match\n", temp);
       fprintf (stderr, "Header: %u | %u - Footer: %u | %u\n", sizeOf (temp),
-               isAllocated (temp), sizeOf ((address)nextHeader (temp)),
-               isAllocated ((address)nextHeader (temp)));
+                isAllocated (temp), sizeOf ((address)nextHeader (temp)),
+                isAllocated ((address)nextHeader (temp)));
       return 0;
     }
     // Check if coalescing is correct
@@ -272,8 +275,7 @@ mm_check (void)
       bool alloc_nextBlock = isAllocated (nextBlock (temp));
       // Print the general error message for coalescing once instead of in every case
       if (!alloc_nextBlock || !alloc_prevBlock)
-        fprintf (stderr, "Block at address %p was not coalesced correctly\n",
-                 temp);
+        fprintf (stderr, "Block at address %p was not coalesced correctly\n", temp);
       if (alloc_prevBlock && !alloc_nextBlock)
       {
         // Triggers when this block and next block are both not allocated
@@ -296,8 +298,7 @@ mm_check (void)
         //  not allocated
         // Should never reach here because the previous block would trigger the
         //  alloc_prevBlock && !alloc_nextBlock case and return
-        fprintf (stderr,
-                 "Should have coalesced with both surrounding blocks\n");
+        fprintf (stderr, "Should have coalesced with both surrounding blocks\n");
         return 0;
       }
     }
@@ -307,8 +308,8 @@ mm_check (void)
   if (sizeOf (temp) != 0 || isAllocated (temp) != 1)
   {
     fprintf (stderr, "Ending sentinel tag is not set up correctly\n");
-    fprintf (stderr, "Expected: %u | %u - Actual: %u | %u\n", 0, 1,
-             sizeOf (temp), isAllocated (temp));
+    fprintf (stderr, "Expected: %u | %u - Actual: %u | %u\n",
+            0, 1, sizeOf (temp), isAllocated (temp));
     return 0;
   }
   return 1;
@@ -451,8 +452,7 @@ printPtrDiff (const char* header, void* p, void* base)
 void
 printBlock (address p)
 {
-  printf (/*"Block Addr %p;*/ "Size %u; Alloc %d\n", /*p,*/ sizeOf (p),
-          isAllocated (p));
+  printf (/*"Block Addr %p;*/ "Size %u; Alloc %d\n", /*p,*/ sizeOf (p), isAllocated (p));
 }
 
 void
